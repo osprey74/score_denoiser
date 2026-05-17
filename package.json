@@ -8,7 +8,9 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
-    "sidecar": "cd sidecar && uvicorn main:app --port 8766 --reload"
+    "sidecar": "cd sidecar && uvicorn main:app --port 8766 --reload",
+    "build:sidecar": "powershell -ExecutionPolicy Bypass -File sidecar/build.ps1",
+    "build:sidecar:unix": "bash sidecar/build.sh"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",
