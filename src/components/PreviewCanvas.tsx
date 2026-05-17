@@ -30,8 +30,12 @@ export function PreviewCanvas({
   const minimapRef = useRef<HTMLCanvasElement>(null);
 
   const [bitmap, setBitmap] = useState<ImageBitmap | null>(null);
+  // 現在の bitmap がどの imageB64 から作られたか（レース対策）
+  const [bitmapKey, setBitmapKey] = useState<string | null>(null);
   const [containerSize, setContainerSize] = useState({ w: 600, h: 400 });
   const [view, setView] = useState<Viewport>({ x: 0, y: 0, zoom: 1 });
+  // 次回 bitmap が現在の imageB64 と一致した時点で fit を適用する旗
+  const [pendingFit, setPendingFit] = useState(true);
 
   const viewRef = useRef(view);
   viewRef.current = view;
@@ -44,13 +48,17 @@ export function PreviewCanvas({
   useEffect(() => {
     if (!imageB64) {
       setBitmap(null);
+      setBitmapKey(null);
       return;
     }
     let cancelled = false;
     const img = new Image();
     img.onload = () => {
       createImageBitmap(img).then((bmp) => {
-        if (!cancelled) setBitmap(bmp);
+        if (!cancelled) {
+          setBitmap(bmp);
+          setBitmapKey(imageB64);
+        }
       });
     };
     img.src = `data:image/png;base64,${imageB64}`;
@@ -79,11 +87,19 @@ export function PreviewCanvas({
     return { x, y, zoom };
   };
 
-  // ── 初回ロード時 + resetSignal で fit ────────────
+  // ── resetSignal が変化したら pendingFit を立てる ──
+  // （初回マウント時にも一度だけ立つ → 最初の bitmap で fit される）
   useEffect(() => {
-    if (!bitmap) return;
+    setPendingFit(true);
+  }, [resetSignal]);
+
+  // ── bitmap が現在の imageB64 と一致しており、かつ pendingFit が立っているときだけ fit ──
+  // （= bitmap 変更だけでは fit しない。明示的 reset signal のときだけ fit する）
+  useEffect(() => {
+    if (!bitmap || bitmapKey !== imageB64 || !pendingFit) return;
     setView(fitView(bitmap, sizeRef.current.w, sizeRef.current.h));
-  }, [bitmap, resetSignal]);
+    setPendingFit(false);
+  }, [bitmap, bitmapKey, imageB64, pendingFit]);
 
   // ── ビューポート制約（画像外に飛ばない） ────────
   const clampView = (v: Viewport, bmp: ImageBitmap, w: number, h: number): Viewport => {

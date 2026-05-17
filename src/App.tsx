@@ -24,7 +24,8 @@ interface BatchResult {
   error?: string;
 }
 
-const KSIZE_OPTIONS = [0, 3, 5, 7, 9, 11, 15, 21, 31];
+const KSIZE_MAX = 31; // 最大カーネルサイズ (奇数)
+const KSIZE_MAX_POS = (KSIZE_MAX - 1) / 2; // スライダー位置の最大値
 
 const DEFAULT_CONFIG: AppConfig = {
   folder: "",
@@ -147,7 +148,7 @@ export default function App() {
       try {
         const r = await generatePreview(f.path, params, showMode !== "after");
         setPreview(r);
-        if (!cfgRef.current.keep_view) setResetSignal((s) => s + 1);
+        // reset の発火はファイル変更を検出する別 effect で扱う（パラメータ変更時は維持）
       } catch (e) {
         setPreviewError(String(e));
         setPreview(null);
@@ -158,10 +159,20 @@ export default function App() {
     [files, params, showMode],
   );
 
-  // auto-preview on selection change
+  // auto-preview on selection change (also fires on param/showMode change via runPreview ref)
   useEffect(() => {
     if (curIdx >= 0 && curIdx < files.length) runPreview(curIdx);
   }, [curIdx, files, runPreview]);
+
+  // ファイル変更時のみ reset (パラメータ変更ではトリガーしない)
+  const prevFilePathRef = useRef<string>("");
+  useEffect(() => {
+    const cur = curIdx >= 0 && curIdx < files.length ? files[curIdx].path : "";
+    if (prevFilePathRef.current && prevFilePathRef.current !== cur && !cfgRef.current.keep_view) {
+      setResetSignal((s) => s + 1);
+    }
+    prevFilePathRef.current = cur;
+  }, [curIdx, files]);
 
   // -- keyboard shortcuts --
   useEffect(() => {
@@ -296,22 +307,22 @@ export default function App() {
       </header>
 
       <section className="params">
-        <ParamGroup
+        <KernelSlider
+          id="blur-slider"
           label="① Gaussian Blur"
-          hint="微細ノイズを均す"
+          hint="微細ノイズを均す（k=0 でスキップ）"
           value={cfg.blur_ksize}
-          options={KSIZE_OPTIONS}
           onChange={(v) => setCfg({ ...cfg, blur_ksize: v })}
         />
         <ThresholdSlider
           value={cfg.threshold}
           onChange={(v) => setCfg({ ...cfg, threshold: v })}
         />
-        <ParamGroup
+        <KernelSlider
+          id="close-slider"
           label="③ Morphology Close"
-          hint="黒領域内の白い穴を塗りつぶす"
+          hint="黒領域内の白い穴を塗りつぶす（k=0 でスキップ）"
           value={cfg.close_ksize}
-          options={KSIZE_OPTIONS}
           onChange={(v) => setCfg({ ...cfg, close_ksize: v })}
         />
         <div className="param-group">
@@ -472,29 +483,38 @@ export default function App() {
   );
 }
 
-function ParamGroup({
+function KernelSlider({
+  id,
   label,
   hint,
   value,
-  options,
   onChange,
 }: {
+  id: string;
   label: string;
   hint: string;
   value: number;
-  options: number[];
   onChange: (v: number) => void;
 }) {
+  // 位置 0 = カーネル 0 (off), 位置 N (>=1) = カーネル 2N+1 (奇数)
+  const sliderPos = value === 0 ? 0 : Math.floor((value - 1) / 2);
+  const handleChange = (p: number) => onChange(p === 0 ? 0 : 2 * p + 1);
+
   return (
     <div className="param-group">
-      <label className="bold">{label}</label>
-      <div className="radio-row">
-        {options.map((opt) => (
-          <label key={opt}>
-            <input type="radio" checked={value === opt} onChange={() => onChange(opt)} />
-            {opt === 0 ? "なし" : `k=${opt}`}
-          </label>
-        ))}
+      <label className="bold" htmlFor={id}>{label}</label>
+      <div className="slider-row">
+        <input
+          id={id}
+          type="range"
+          min={0}
+          max={KSIZE_MAX_POS}
+          step={1}
+          value={sliderPos}
+          aria-label={label}
+          onChange={(e) => handleChange(parseInt(e.target.value, 10))}
+        />
+        <span className="value">{value === 0 ? "なし" : `k=${value}`}</span>
       </div>
       <div className="hint">{hint}</div>
     </div>
