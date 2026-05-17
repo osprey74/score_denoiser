@@ -21,6 +21,7 @@ html, body, #root {
   height: 100vh;
   text-align: center;
   padding: 20px;
+  gap: 12px;
 }
 .boot-error pre {
   background: #fff3e0;
@@ -30,6 +31,7 @@ html, body, #root {
   white-space: pre-wrap;
 }
 
+/* ── folder bar ── */
 .folder-bar {
   display: flex;
   align-items: center;
@@ -49,6 +51,7 @@ html, body, #root {
 }
 .folder-bar .muted { color: #666; font-size: 12px; }
 
+/* ── params ── */
 .params {
   display: flex;
   align-items: flex-start;
@@ -58,9 +61,7 @@ html, body, #root {
   border-bottom: 1px solid #ddd;
   flex-wrap: wrap;
 }
-.param-group {
-  min-width: 180px;
-}
+.param-group { min-width: 180px; }
 .param-group .bold { font-weight: 600; display: block; margin-bottom: 4px; }
 .radio-row { display: flex; gap: 8px; flex-wrap: wrap; }
 .radio-row label { display: flex; align-items: center; gap: 2px; font-size: 12px; }
@@ -70,12 +71,14 @@ html, body, #root {
 .hint { font-size: 11px; color: #777; margin-top: 2px; }
 .checkbox { display: flex; align-items: center; gap: 4px; margin-top: 4px; font-size: 12px; }
 
+/* ── split layout ── */
 .split {
   display: grid;
   grid-template-columns: 240px 1fr;
   min-height: 0;
 }
 
+/* ── file list ── */
 .files {
   display: flex;
   flex-direction: column;
@@ -95,12 +98,25 @@ html, body, #root {
 }
 .files .primary:hover:not(:disabled) { background: #1565c0; }
 .files .primary:disabled { background: #aaa; cursor: not-allowed; }
-.files .kbd {
+.kbd {
   font-size: 10px;
   background: rgba(255,255,255,0.25);
   padding: 1px 5px;
   border-radius: 2px;
   margin-left: 4px;
+  font-family: ui-monospace, monospace;
+}
+.folder-bar .kbd {
+  background: rgba(0,0,0,0.08);
+  color: #555;
+}
+.file-search {
+  margin: 0 6px 4px;
+  padding: 4px 8px;
+  border: 1px solid #ccc;
+  border-radius: 3px;
+  font-family: inherit;
+  font-size: 12px;
 }
 .files-count {
   padding: 0 8px 4px;
@@ -130,18 +146,13 @@ html, body, #root {
 .file-list li.error { background: #ffebee; }
 .file-list li.skipped { background: #f0f0f0; color: #999; }
 
+/* ── preview area ── */
 .preview {
   position: relative;
-  background: #666;
-  overflow: auto;
+  background: #555;
+  overflow: hidden;
   display: grid;
   place-items: center;
-}
-.preview .single {
-  max-width: 100%;
-  max-height: 100%;
-  object-fit: contain;
-  background: #fff;
 }
 .preview .placeholder {
   color: #ddd;
@@ -156,9 +167,89 @@ html, body, #root {
   padding: 6px 12px;
   border-radius: 4px;
   font-size: 12px;
+  z-index: 10;
 }
 .preview .overlay.error { background: rgba(180,0,0,0.85); }
 
+/* ── canvas wrap (single + split common) ── */
+.canvas-wrap {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background: #666;
+  overflow: hidden;
+}
+.main-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: grab;
+}
+.main-canvas:active { cursor: grabbing; }
+
+.canvas-caption {
+  position: absolute;
+  top: 0;
+  left: 0;
+  background: rgba(0,0,0,0.7);
+  color: #fff;
+  font-size: 11px;
+  padding: 4px 10px;
+  border-bottom-right-radius: 4px;
+  pointer-events: none;
+}
+
+.minimap {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: #fff;
+  padding: 4px;
+  border-radius: 4px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+}
+.minimap canvas {
+  display: block;
+  cursor: crosshair;
+}
+.minimap-info {
+  font-size: 10px;
+  color: #555;
+  text-align: center;
+  padding-top: 2px;
+  font-variant-numeric: tabular-nums;
+}
+
+.fit-btn {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  padding: 4px 8px;
+  background: rgba(0,0,0,0.6);
+  color: #fff;
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 11px;
+}
+.fit-btn:hover { background: rgba(0,0,0,0.85); }
+
+.canvas-spinner {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(0,0,0,0.35);
+  color: #fff;
+  font-size: 13px;
+  gap: 12px;
+  z-index: 20;
+  pointer-events: none;
+}
+.canvas-spinner.standalone { background: transparent; color: #ddd; }
+.canvas-spinner > div:last-child { margin-top: 8px; }
+
+/* ── split preview (two side-by-side canvases) ── */
 .split-preview {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -167,24 +258,9 @@ html, body, #root {
   height: 100%;
   background: #333;
 }
-.split-preview > div {
-  display: flex;
-  flex-direction: column;
-  background: #fff;
-  overflow: hidden;
-}
-.split-preview .caption {
-  background: #333;
-  color: #fff;
-  padding: 4px 8px;
-  font-size: 11px;
-}
-.split-preview img {
-  flex: 1;
-  min-height: 0;
-  object-fit: contain;
-}
+.split-preview .canvas-wrap { background: #666; }
 
+/* ── batch bar ── */
 .batch-bar {
   display: flex;
   align-items: center;
@@ -193,7 +269,7 @@ html, body, #root {
   background: #fff;
   border-top: 1px solid #ddd;
 }
-.batch-bar button {
+.batch-bar .batch-go {
   padding: 8px 14px;
   font-weight: 600;
   background: #43a047;
@@ -202,13 +278,31 @@ html, body, #root {
   border-radius: 3px;
   cursor: pointer;
 }
-.batch-bar button:hover:not(:disabled) { background: #388e3c; }
-.batch-bar button:disabled { background: #aaa; cursor: not-allowed; }
+.batch-bar .batch-go:hover:not(:disabled) { background: #388e3c; }
+.batch-bar .batch-go:disabled { background: #aaa; cursor: not-allowed; }
+.batch-bar .batch-cancel {
+  padding: 8px 14px;
+  font-weight: 600;
+  background: #e53935;
+  color: #fff;
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+}
+.batch-bar .batch-cancel:hover { background: #c62828; }
 .batch-bar progress {
   flex: 1;
   height: 16px;
 }
+.batch-status {
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 320px;
+}
 
+/* ── generic button ── */
 button {
   font-family: inherit;
   font-size: 13px;
@@ -220,6 +314,7 @@ button {
 }
 button:hover:not(:disabled) { background: #efefef; }
 
+/* ── toast ── */
 .toast {
   position: fixed;
   bottom: 60px;
@@ -231,6 +326,7 @@ button:hover:not(:disabled) { background: #efefef; }
   font-size: 13px;
   box-shadow: 0 4px 12px rgba(0,0,0,0.3);
   animation: slideIn 0.2s ease;
+  z-index: 100;
 }
 .toast.warn { background: #f57c00; }
 .toast.error { background: #c62828; }
@@ -238,4 +334,22 @@ button:hover:not(:disabled) { background: #efefef; }
 @keyframes slideIn {
   from { transform: translateX(20px); opacity: 0; }
   to { transform: translateX(0); opacity: 1; }
+}
+
+/* ── spinner ── */
+.spinner {
+  width: 36px;
+  height: 36px;
+  border: 3px solid rgba(255,255,255,0.25);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.9s linear infinite;
+}
+.boot .spinner {
+  border-color: rgba(0,0,0,0.15);
+  border-top-color: #1976d2;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }

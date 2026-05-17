@@ -106,11 +106,13 @@ export async function* runBatch(
   params: PreviewParams,
   output_subdir = "処理済み",
   skip_existing = false,
+  signal?: AbortSignal,
 ): AsyncGenerator<BatchEvent> {
   const res = await fetch(`${BASE}/batch`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ folder, files, ...params, output_subdir, skip_existing }),
+    signal,
   });
   if (!res.body) throw new Error("No response body");
   const reader = res.body.getReader();

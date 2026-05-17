@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 
+import { PreviewCanvas } from "./components/PreviewCanvas";
 import {
   AppConfig,
   BatchEvent,
@@ -16,6 +17,12 @@ import {
 } from "./api";
 
 type FileStatus = "" | "doing" | "done" | "skipped" | "error";
+
+interface BatchResult {
+  name: string;
+  status: FileStatus;
+  error?: string;
+}
 
 const KSIZE_OPTIONS = [0, 3, 5, 7];
 
@@ -36,18 +43,22 @@ export default function App() {
   const [cfg, setCfg] = useState<AppConfig>(DEFAULT_CONFIG);
   const [files, setFiles] = useState<FileEntry[]>([]);
   const [statuses, setStatuses] = useState<Record<string, FileStatus>>({});
+  const [batchResults, setBatchResults] = useState<BatchResult[]>([]);
   const [curIdx, setCurIdx] = useState<number>(-1);
   const [showMode, setShowMode] = useState<"after" | "before" | "split">("after");
+  const [filter, setFilter] = useState("");
 
   const [preview, setPreview] = useState<PreviewResponse | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
+  const [resetSignal, setResetSignal] = useState(0);
 
   const [toast, setToast] = useState<{ msg: string; kind: "info" | "warn" | "error" } | null>(null);
   const toastTimer = useRef<number | null>(null);
 
   const [batchActive, setBatchActive] = useState(false);
   const [batchEvent, setBatchEvent] = useState<BatchEvent | null>(null);
+  const batchAbortRef = useRef<AbortController | null>(null);
 
   const cfgRef = useRef(cfg);
   cfgRef.current = cfg;
@@ -61,7 +72,14 @@ export default function App() {
     [cfg.blur_ksize, cfg.threshold, cfg.close_ksize],
   );
 
-  // -- bootstrap: wait for sidecar, then load config --
+  // 検索フィルタ後のリスト
+  const visibleFiles = useMemo(() => {
+    const q = filter.trim().toLowerCase();
+    if (!q) return files;
+    return files.filter((f) => f.name.toLowerCase().includes(q));
+  }, [files, filter]);
+
+  // -- bootstrap --
   useEffect(() => {
     waitForSidecar()
       .then(async () => {
@@ -109,9 +127,11 @@ export default function App() {
       const r = await listFolder(dir);
       setFiles(r.files);
       setStatuses({});
+      setBatchResults([]);
       setCurIdx(r.files.length > 0 ? 0 : -1);
       setPreview(null);
       setCfg((c) => ({ ...c, folder: dir }));
+      setResetSignal((s) => s + 1);
       showToast(`${r.files.length} 個の PNG を検出`, "info");
     } catch (e) {
       showToast(String(e), "error");
@@ -127,6 +147,7 @@ export default function App() {
       try {
         const r = await generatePreview(f.path, params, showMode !== "after");
         setPreview(r);
+        if (!cfgRef.current.keep_view) setResetSignal((s) => s + 1);
       } catch (e) {
         setPreviewError(String(e));
         setPreview(null);
@@ -137,17 +158,25 @@ export default function App() {
     [files, params, showMode],
   );
 
-  // auto-preview when selection changes
+  // auto-preview on selection change
   useEffect(() => {
     if (curIdx >= 0 && curIdx < files.length) runPreview(curIdx);
   }, [curIdx, files, runPreview]);
 
-  // -- keyboard shortcuts: ←/→/F5 --
+  // -- keyboard shortcuts --
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (batchActive) return;
       const target = e.target as HTMLElement | null;
-      if (target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) return;
+      const isInput = target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName);
+
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "o") {
+        e.preventDefault();
+        if (!batchActive) selectFolder();
+        return;
+      }
+      if (isInput) return;
+      if (batchActive) return;
+
       if (e.key === "ArrowDown" || e.key === "ArrowRight") {
         e.preventDefault();
         setCurIdx((i) => Math.min(i + 1, files.length - 1));
@@ -157,11 +186,14 @@ export default function App() {
       } else if (e.key === "F5") {
         e.preventDefault();
         if (curIdx >= 0) runPreview(curIdx);
+      } else if (e.key === "Home") {
+        e.preventDefault();
+        setResetSignal((s) => s + 1);
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [files.length, curIdx, runPreview, batchActive]);
+  }, [files.length, curIdx, runPreview, batchActive, selectFolder]);
 
   const startBatch = useCallback(async () => {
     if (!cfg.folder || files.length === 0) {
@@ -172,6 +204,10 @@ export default function App() {
 
     setBatchActive(true);
     setStatuses({});
+    setBatchResults([]);
+    const collected: BatchResult[] = [];
+    const ac = new AbortController();
+    batchAbortRef.current = ac;
     try {
       for await (const ev of runBatch(
         cfg.folder,
@@ -179,48 +215,83 @@ export default function App() {
         params,
         cfg.output_subdir,
         cfg.skip_existing,
+        ac.signal,
       )) {
         setBatchEvent(ev);
-        if (ev.name) {
-          setStatuses((prev) => ({
-            ...prev,
-            [ev.name as string]: (ev.status === "complete" ? "done" : ev.status) as FileStatus,
-          }));
+        if (ev.name && ev.status !== "doing") {
+          const st = (ev.status === "complete" ? "done" : ev.status) as FileStatus;
+          setStatuses((prev) => ({ ...prev, [ev.name as string]: st }));
+          collected.push({ name: ev.name, status: st, error: ev.error });
+        } else if (ev.name) {
+          setStatuses((prev) => ({ ...prev, [ev.name as string]: "doing" }));
         }
         if (ev.status === "complete") {
           showToast(`✅ 完了: ${ev.output_dir}`, "info");
         }
       }
     } catch (e) {
-      showToast(String(e), "error");
+      const msg = String(e);
+      if (msg.includes("abort")) {
+        showToast("キャンセルしました", "warn");
+      } else {
+        showToast(msg, "error");
+      }
     } finally {
       setBatchActive(false);
+      batchAbortRef.current = null;
+      setBatchResults(collected);
     }
   }, [cfg, files, params, showToast]);
+
+  const cancelBatch = useCallback(() => {
+    batchAbortRef.current?.abort();
+  }, []);
+
+  const exportCSV = useCallback(() => {
+    if (batchResults.length === 0) {
+      showToast("エクスポートするバッチ結果がありません", "warn");
+      return;
+    }
+    const lines = ["filename,status,error"];
+    for (const r of batchResults) {
+      const esc = (s: string) => `"${s.replace(/"/g, '""')}"`;
+      lines.push(`${esc(r.name)},${esc(r.status)},${esc(r.error ?? "")}`);
+    }
+    const blob = new Blob(["﻿" + lines.join("\n")], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `batch-result-${Date.now()}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [batchResults, showToast]);
 
   if (sidecarError) {
     return (
       <div className="boot-error">
         <h2>サイドカー起動エラー</h2>
         <pre>{sidecarError}</pre>
-        <p>開発時は別ターミナルで <code>cd sidecar && uvicorn main:app --port 8766</code> を実行してください。</p>
+        <p>別ターミナルで <code>npm run sidecar</code> を実行してください。</p>
       </div>
     );
   }
   if (!sidecarReady) {
-    return <div className="boot">サイドカー起動中…</div>;
+    return (
+      <div className="boot">
+        <div className="spinner" />
+        <div>サイドカー起動中…</div>
+      </div>
+    );
   }
+
+  const beforeB64 = preview?.before_png_b64 ?? null;
+  const afterB64 = preview?.after_png_b64 ?? null;
 
   return (
     <div className="app">
       <header className="folder-bar">
-        <button onClick={selectFolder}>📁 フォルダを選択…</button>
-        <input
-          type="text"
-          value={cfg.folder}
-          readOnly
-          placeholder="フォルダ未選択"
-        />
+        <button type="button" onClick={selectFolder} title="Ctrl+O">📁 フォルダを選択… <span className="kbd">Ctrl+O</span></button>
+        <input type="text" value={cfg.folder} readOnly placeholder="フォルダ未選択" aria-label="選択中のフォルダパス" />
         <span className="muted">{files.length} 個の PNG</span>
       </header>
 
@@ -265,6 +336,14 @@ export default function App() {
           <label className="checkbox">
             <input
               type="checkbox"
+              checked={cfg.keep_view}
+              onChange={(e) => setCfg({ ...cfg, keep_view: e.target.checked })}
+            />
+            ファイル切替時にズーム維持
+          </label>
+          <label className="checkbox">
+            <input
+              type="checkbox"
               checked={cfg.skip_existing}
               onChange={(e) => setCfg({ ...cfg, skip_existing: e.target.checked })}
             />
@@ -276,58 +355,115 @@ export default function App() {
       <main className="split">
         <aside className="files">
           <button
+            type="button"
             className="primary"
-            onClick={() => curIdx >= 0 ? runPreview(curIdx) : showToast("ファイルを選択してください", "warn")}
+            onClick={() => (curIdx >= 0 ? runPreview(curIdx) : showToast("ファイルを選択してください", "warn"))}
             disabled={batchActive}
           >
             🔄 プレビュー再生成 <span className="kbd">F5</span>
           </button>
+          <input
+            type="search"
+            className="file-search"
+            placeholder="🔍 ファイル名で絞り込み"
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+          />
           <div className="files-count">
             {files.length === 0
               ? "ファイルなし"
-              : `${curIdx + 1} / ${files.length}`}
+              : filter
+                ? `${visibleFiles.length} / ${files.length} 件`
+                : `${curIdx + 1} / ${files.length}`}
           </div>
           <ul className="file-list">
-            {files.map((f, i) => (
-              <li
-                key={f.path}
-                className={[
-                  i === curIdx ? "sel" : "",
-                  statuses[f.name] ?? "",
-                ].join(" ")}
-                onClick={() => setCurIdx(i)}
-              >
-                {f.name}
-              </li>
-            ))}
+            {visibleFiles.map((f) => {
+              const trueIdx = files.indexOf(f);
+              return (
+                <li
+                  key={f.path}
+                  className={[
+                    trueIdx === curIdx ? "sel" : "",
+                    statuses[f.name] ?? "",
+                  ].join(" ")}
+                  onClick={() => setCurIdx(trueIdx)}
+                  title={f.name}
+                >
+                  {f.name}
+                </li>
+              );
+            })}
           </ul>
         </aside>
 
         <section className="preview">
-          {previewLoading && <div className="overlay">処理中…</div>}
           {previewError && <div className="overlay error">{previewError}</div>}
-          {preview && <PreviewView preview={preview} mode={showMode} />}
-          {!preview && !previewLoading && !previewError && (
+          {showMode === "split" && beforeB64 ? (
+            <div className="split-preview">
+              <PreviewCanvas
+                imageB64={beforeB64}
+                caption="処理前"
+                resetSignal={resetSignal}
+                loading={previewLoading}
+              />
+              <PreviewCanvas
+                imageB64={afterB64}
+                caption="処理後"
+                resetSignal={resetSignal}
+                loading={previewLoading}
+              />
+            </div>
+          ) : showMode === "before" && beforeB64 ? (
+            <PreviewCanvas
+              imageB64={beforeB64}
+              caption="処理前"
+              resetSignal={resetSignal}
+              loading={previewLoading}
+            />
+          ) : afterB64 ? (
+            <PreviewCanvas
+              imageB64={afterB64}
+              caption="処理後"
+              resetSignal={resetSignal}
+              loading={previewLoading}
+            />
+          ) : !previewLoading ? (
             <div className="placeholder">
               {files.length === 0
-                ? "フォルダを選択してください"
+                ? "フォルダを選択してください (Ctrl+O)"
                 : "ファイルを選択してください"}
+            </div>
+          ) : (
+            <div className="canvas-spinner standalone">
+              <div className="spinner" />
+              <div>処理中…</div>
             </div>
           )}
         </section>
       </main>
 
       <footer className="batch-bar">
-        <button onClick={startBatch} disabled={batchActive || files.length === 0}>
-          ▶ 一括処理を実行
-        </button>
+        {!batchActive ? (
+          <button type="button" className="batch-go" onClick={startBatch} disabled={files.length === 0}>
+            ▶ 一括処理を実行
+          </button>
+        ) : (
+          <button type="button" className="batch-cancel" onClick={cancelBatch}>
+            ■ キャンセル
+          </button>
+        )}
         {batchActive && batchEvent && (
           <>
             <progress max={batchEvent.total} value={batchEvent.index + 1} />
-            <span>
+            <span className="batch-status">
               {batchEvent.index + 1} / {batchEvent.total} — {batchEvent.name ?? batchEvent.status}
             </span>
           </>
+        )}
+        {!batchActive && batchResults.length > 0 && (
+          <button type="button" onClick={exportCSV} title="バッチ結果を CSV で保存">
+            📊 CSV エクスポート ({batchResults.length})
+          </button>
         )}
       </footer>
 
@@ -355,11 +491,7 @@ function ParamGroup({
       <div className="radio-row">
         {options.map((opt) => (
           <label key={opt}>
-            <input
-              type="radio"
-              checked={value === opt}
-              onChange={() => onChange(opt)}
-            />
+            <input type="radio" checked={value === opt} onChange={() => onChange(opt)} />
             {opt === 0 ? "なし" : `k=${opt}`}
           </label>
         ))}
@@ -378,13 +510,15 @@ function ThresholdSlider({
 }) {
   return (
     <div className="param-group">
-      <label className="bold">② Threshold</label>
+      <label className="bold" htmlFor="threshold-slider">② Threshold</label>
       <div className="slider-row">
         <input
+          id="threshold-slider"
           type="range"
           min={100}
           max={245}
           value={value}
+          aria-label="Threshold 値"
           onChange={(e) => onChange(parseInt(e.target.value, 10))}
         />
         <span className="value">{value}</span>
@@ -392,36 +526,4 @@ function ThresholdSlider({
       <div className="hint">グレーエッジを黒側に取り込む（高い=黒↑）</div>
     </div>
   );
-}
-
-function PreviewView({
-  preview,
-  mode,
-}: {
-  preview: PreviewResponse;
-  mode: "after" | "before" | "split";
-}) {
-  const afterSrc = `data:image/png;base64,${preview.after_png_b64}`;
-  const beforeSrc = preview.before_png_b64
-    ? `data:image/png;base64,${preview.before_png_b64}`
-    : null;
-
-  if (mode === "split" && beforeSrc) {
-    return (
-      <div className="split-preview">
-        <div>
-          <div className="caption">処理前</div>
-          <img src={beforeSrc} alt="before" />
-        </div>
-        <div>
-          <div className="caption">処理後</div>
-          <img src={afterSrc} alt="after" />
-        </div>
-      </div>
-    );
-  }
-  if (mode === "before" && beforeSrc) {
-    return <img className="single" src={beforeSrc} alt="before" />;
-  }
-  return <img className="single" src={afterSrc} alt="after" />;
 }
