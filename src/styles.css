@@ -446,6 +446,38 @@ button:hover:not(:disabled) { background: #efefef; }
 }
 .about-grid a:hover { text-decoration: underline; }
 
+.about-kofi {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid #eee;
+  text-align: center;
+  color: #777;
+  font-size: 12px;
+}
+.about-kofi p {
+  margin: 0 0 10px 0;
+}
+.kofi-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 20px;
+  background: #0085FF;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-family: "Quicksand", sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+.kofi-button:hover { opacity: 0.9; }
+.kofi-cup {
+  width: 16px;
+  height: 16px;
+}
+
 @keyframes fadeIn {
   from { opacity: 0; }
   to { opacity: 1; }

@@ -5,6 +5,7 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 const RELEASES_URL = "https://github.com/osprey74/score_denoiser/releases";
 const BSKY_URL = "https://bsky.app/profile/laixiaoxia.bsky.social";
 const ICON_URL = "https://www.flaticon.com/free-icons/music-score";
+const KOFI_URL = "https://ko-fi.com/A0A71UNW9H";
 
 interface AboutDialogProps {
   onClose: () => void;
@@ -98,6 +99,22 @@ export function AboutDialog({ onClose }: AboutDialogProps) {
               </a>
             </dd>
           </dl>
+
+          <section className="about-kofi">
+            <p>アプリ作者にコーヒーをご馳走する</p>
+            <button
+              type="button"
+              className="kofi-button"
+              onClick={() => openUrl(KOFI_URL).catch(console.error)}
+            >
+              <img
+                src="https://storage.ko-fi.com/cdn/cup-border.png"
+                alt=""
+                className="kofi-cup"
+              />
+              Buy the developer a coffee on Ko-fi
+            </button>
+          </section>
         </div>
       </div>
     </div>
