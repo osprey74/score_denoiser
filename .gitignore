@@ -1,28 +1,29 @@
-# Byte-compiled / optimized / DLL files
+# Python
 __pycache__/
 *.py[cod]
 *$py.class
-
-# Distribution / packaging
-build/
-dist/
-*.egg-info/
-*.egg
-
-# Virtual environments
 .venv/
 venv/
-env/
-ENV/
+*.egg-info/
+*.spec
 
-# IDE / editors
+# Node
+node_modules/
+dist/
+*.tsbuildinfo
+
+# Rust / Tauri
+src-tauri/target/
+src-tauri/gen/
+
+# PyInstaller / sidecar build output
+sidecar/build/
+sidecar/dist/
+src-tauri/binaries/
+
+# IDE / OS
 .vscode/
 .idea/
-*.swp
-*.swo
-*~
-
-# OS
 .DS_Store
 Thumbs.db
 desktop.ini
@@ -31,6 +32,4 @@ desktop.ini
 処理済み/
 *.log
 config.json
-
-# PyInstaller
-*.spec
+.env

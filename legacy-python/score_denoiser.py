@@ -29,6 +29,18 @@ from PIL import Image, ImageTk, ImageDraw
 APP_DIR = Path(__file__).resolve().parent
 ICON_ICO = APP_DIR / "music-score.ico"
 ICON_PNG = APP_DIR / "music-score.png"
+APP_ID   = "osprey74.score_denoiser.2.6"
+
+
+def _set_windows_appid():
+    """Windows タスクバーでアプリ独自アイコンを表示するため AppUserModelID を設定。
+    tk.Tk() より前に呼ぶこと。"""
+    if sys.platform.startswith("win"):
+        try:
+            import ctypes
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(APP_ID)
+        except Exception:
+            pass
 
 
 # ─────────────────────────────────────────────────────
@@ -105,6 +117,7 @@ CLR_ERROR = "#ffebee"
 
 class App(tk.Tk):
     def __init__(self):
+        _set_windows_appid()
         super().__init__()
         self.title("楽譜ノイズ除去ツール v2.6")
         self.geometry("1100x880")
@@ -322,6 +335,10 @@ class App(tk.Tk):
         f_list = ttk.LabelFrame(self._paned, text="📄  ファイル一覧", padding=4)
         self._paned.add(f_list, weight=0)
 
+        self._btn_regen = ttk.Button(f_list, text="🔄 プレビュー再生成",
+                                      command=self._regenerate_preview)
+        self._btn_regen.pack(fill="x", padx=2, pady=(0, 3))
+
         self._lbl_cnt2 = ttk.Label(f_list, text="ファイルなし",
                                     foreground="#777", font=("", 8))
         self._lbl_cnt2.pack(anchor="w", padx=2, pady=(0,3))
@@ -465,6 +482,16 @@ class App(tk.Tk):
         self._cur_idx = idx
         self._reset_preview(force_reset_view=not self.keep_view_var.get())
         self._run_preview(idx)
+
+    def _regenerate_preview(self):
+        """現在選択中ファイルに対して、現在のパラメータでプレビューを再生成する"""
+        if self._spinning or self.is_busy:
+            return
+        if self._cur_idx < 0 or not self.png_files:
+            self._show_toast("ファイルを選択してください", bg="#ffa726")
+            return
+        self._reset_preview(force_reset_view=not self.keep_view_var.get())
+        self._run_preview(self._cur_idx)
 
     # ── プレビュー生成（非同期）─────────────────────
 

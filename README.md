@@ -1,68 +1,73 @@
-# 楽譜ノイズ除去ツール v1.0
+# 楽譜ノイズ除去ツール (score_denoiser)
 
-モノクロ二値化楽譜 PNG の **音符の玉内部にある白いノイズ点を黒で塗りつぶす** デスクトップツールです。
+スキャンしたモノクロ楽譜 PNG の音符・五線を濃く・くっきりさせるデスクトップアプリ。
 
----
+## スタック
 
-## セットアップ
+- **Frontend**: Tauri v2, React 18, TypeScript, Vite
+- **Backend**: Rust（Tauri 本体のみ）
+- **Sidecar**: Python 3.10+, FastAPI, OpenCV, NumPy（ポート 8766 固定）
+
+## ディレクトリ構成
+
+```
+score_denoiser/
+├── src/              # React UI
+├── src-tauri/        # Tauri (Rust) + tauri.conf.json + icons
+├── sidecar/          # Python サイドカー (FastAPI)
+│   ├── main.py
+│   ├── services/processor.py    # 画像処理コア (process_score)
+│   └── routers/{folder,preview,batch,config}.py
+├── public/           # フロント静的アセット
+├── legacy-python/    # Tkinter 版 v2.6 (アーカイブ)
+└── HANDOFF.md        # 引き継ぎ・残タスク
+```
+
+## 開発コマンド
 
 ```bash
-# 依存ライブラリのインストール
+# Node 依存ライブラリ
+npm install
+
+# Python サイドカー依存
+cd sidecar
+python -m venv .venv
+.venv\Scripts\Activate.ps1   # Windows
+# source .venv/bin/activate    # macOS/Linux
 pip install -r requirements.txt
+cd ..
 
-# 起動
-python score_denoiser.py
+# フロント + Tauri 開発起動（サイドカーも自動起動）
+npm run tauri dev
+
+# サイドカー単体起動（デバッグ用）
+cd sidecar && uvicorn main:app --port 8766 --reload
 ```
 
-Python 3.10 以上推奨。tkinter は Python 標準付属（macOS の場合 `brew install python-tk` が必要な場合あり）。
-
----
-
-## 使い方
-
-### 1. フォルダ選択
-「参照…」から楽譜 PNG が入ったフォルダを選択します。
-
-### 2. パラメータ調整（重要）
-| スライダー | 意味 | 調整の目安 |
-|---|---|---|
-| **最小ノイズ面積** | この px² 未満の白領域は無視 | 1〜10 程度（細かすぎるスペックを除外） |
-| **最大ノイズ面積** | この px² 超の白領域は無視 | 音符の玉の穴サイズに合わせる（100〜500 前後） |
-
-### 3. プレビュー確認
-1. 「🔍 プレビュー生成」をクリック
-2. 赤い丸 = 検出されたノイズ領域
-3. 「◀ 前へ」「次へ ▶」で楽譜全幅を確認
-4. 誤検出が多い / 少ない場合はスライダーを調整して再生成
-
-### 4. 一括処理
-「▶ 一括処理 実行」をクリックすると、同フォルダ内に **「処理済み」** フォルダが自動作成され、  
-元のファイル名のまま処理済みファイルが保存されます。  
-元ファイルは変更されません。
-
----
-
-## アルゴリズム詳細
+## アルゴリズム
 
 ```
-入力: グレースケール PNG（実質二値）
-
-1. 閾値 128 で二値化
-2. 白い連結領域を 8-連結で列挙 (OpenCV connectedComponentsWithStats)
-3. 各領域についてフィルタリング:
-   - 画像の端（上下左右 1px）に接触している → 除外（紙地の白背景）
-   - 面積が [最小, 最大] の範囲外 → 除外
-4. 残った領域 = 音符内部の孤立白ノイズ → 黒(0)で塗りつぶし
-5. 保存
+入力: グレースケール PNG
+  ↓ ① Gaussian Blur (ksize 0/3/5/7)
+  ↓ ② Threshold (100〜245, 推奨 220)
+  ↓ ③ Morphology Close (ksize 0/3/5/7)
+出力: 二値化 PNG（「処理済み」フォルダに保存）
 ```
 
----
+推奨パラメータ: `blur=5, threshold=220, close=5`
 
-## トラブルシューティング
+## 設定の永続化
 
-| 症状 | 対処 |
+`~/.score_denoiser/config.json` に blur/threshold/close/folder 等が自動保存されます。
+
+## キーボードショートカット
+
+| キー | 動作 |
 |---|---|
-| 音符以外が赤丸になる | 最大面積を小さくする |
-| ノイズが検出されない | 最小・最大面積を広げる |
-| macOS で tkinter が起動しない | `brew install python-tk@3.x` |
-| 処理が重い | 6000px 幅画像は 1 枚あたり 1〜5 秒程度（正常） |
+| ↑ / ← | 前のファイル |
+| ↓ / → | 次のファイル |
+| F5 | プレビュー再生成 |
+
+## ライセンス・備考
+
+個人利用ツール。`legacy-python/` には Tkinter 版 v2.6 を保管しています（参照用）。
