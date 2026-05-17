@@ -2,6 +2,7 @@
 """設定の永続化 — config.json で blur/threshold/close/folder/zoom 等を保存"""
 
 import json
+import shutil
 from pathlib import Path
 
 from fastapi import APIRouter
@@ -9,8 +10,17 @@ from pydantic import BaseModel
 
 router = APIRouter(prefix="/config", tags=["config"])
 
-CONFIG_PATH = Path.home() / ".score_denoiser" / "config.json"
-CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+CONFIG_DIR = Path.home() / ".nitido"
+CONFIG_PATH = CONFIG_DIR / "config.json"
+CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+
+# 旧アプリ名 (score_denoiser) からのマイグレーション (一回限り)
+_OLD_CONFIG = Path.home() / ".score_denoiser" / "config.json"
+if _OLD_CONFIG.exists() and not CONFIG_PATH.exists():
+    try:
+        shutil.copy(_OLD_CONFIG, CONFIG_PATH)
+    except Exception:
+        pass
 
 
 class AppConfig(BaseModel):

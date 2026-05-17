@@ -93,7 +93,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tagName: ${{ github.ref_name }}
-          releaseName: '楽譜ノイズ除去ツール ${{ github.ref_name }}'
+          releaseName: 'Nitido ${{ github.ref_name }}'
           releaseBody: |
             Windows および macOS 向けのバイナリです。
 

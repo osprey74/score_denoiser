@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "score_denoiser",
+  "productName": "Nitido",
   "version": "0.1.0",
-  "identifier": "com.osprey74.score_denoiser",
+  "identifier": "com.osprey74.nitido",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "楽譜ノイズ除去ツール",
+        "title": "Nitido — 楽譜ノイズ除去ツール",
         "width": 1280,
         "height": 880,
         "minWidth": 900,

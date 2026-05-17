@@ -1,4 +1,4 @@
-# HANDOFF: 楽譜ノイズ除去ツール (Tauri v2 移植)
+# HANDOFF: Nitido (楽譜ノイズ除去ツール) Tauri v2 移植
 
 > 作成日: 2026-05-17
 > Phase 1 (bootstrap) 完了時点
@@ -122,9 +122,10 @@ npm run tauri dev
 `sidecar/services/processor.py` の `imread_u()` / `imwrite_u()` で対応済み（v2.6 と同実装）。
 
 ### config.json の場所
-Windows: `C:\Users\<user>\.score_denoiser\config.json`  
-macOS: `~/.score_denoiser/config.json`
+Windows: `C:\Users\<user>\.nitido\config.json`  
+macOS: `~/.nitido/config.json`
 
+旧 `~/.score_denoiser/` からは初回起動時に自動マイグレート。
 開発時に設定をリセットしたい場合はこのファイルを削除。
 
 ## 8. アルゴリズム検証

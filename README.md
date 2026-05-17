@@ -1,6 +1,8 @@
-# 楽譜ノイズ除去ツール (score_denoiser)
+# Nitido — 楽譜ノイズ除去ツール
 
 スキャンしたモノクロ楽譜 PNG の音符・五線を濃く・くっきりさせるデスクトップアプリ。
+
+製品名「Nitido」（伊・西語で「鮮明な／くっきりした」の意）。リポジトリ名・ディレクトリ名は引き続き `score_denoiser`。
 
 ## スタック
 
@@ -103,7 +105,8 @@ git push origin v0.1.0
 
 ## 設定の永続化
 
-`~/.score_denoiser/config.json` に blur/threshold/close/folder 等が自動保存されます。
+`~/.nitido/config.json` に blur/threshold/close/folder 等が自動保存されます。
+旧バージョン (`~/.score_denoiser/config.json`) からは初回起動時に自動マイグレートされます。
 
 ## キーボードショートカット
 

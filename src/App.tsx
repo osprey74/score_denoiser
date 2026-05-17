@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 
+import { AboutDialog } from "./components/AboutDialog";
 import { PreviewCanvas, Viewport } from "./components/PreviewCanvas";
 import {
   AppConfig,
@@ -64,6 +65,8 @@ export default function App() {
   const [batchActive, setBatchActive] = useState(false);
   const [batchEvent, setBatchEvent] = useState<BatchEvent | null>(null);
   const batchAbortRef = useRef<AbortController | null>(null);
+
+  const [aboutOpen, setAboutOpen] = useState(false);
 
   const cfgRef = useRef(cfg);
   cfgRef.current = cfg;
@@ -313,6 +316,9 @@ export default function App() {
         <button type="button" onClick={selectFolder} title="Ctrl+O">📁 フォルダを選択… <span className="kbd">Ctrl+O</span></button>
         <input type="text" value={cfg.folder} readOnly placeholder="フォルダ未選択" aria-label="選択中のフォルダパス" />
         <span className="muted">{files.length} 個の PNG</span>
+        <button type="button" className="about-btn" onClick={() => setAboutOpen(true)} title="このアプリについて">
+          ℹ️ このアプリについて
+        </button>
       </header>
 
       <section className="params">
@@ -500,6 +506,7 @@ export default function App() {
       </footer>
 
       {toast && <div className={`toast ${toast.kind}`}>{toast.msg}</div>}
+      {aboutOpen && <AboutDialog onClose={() => setAboutOpen(false)} />}
     </div>
   );
 }

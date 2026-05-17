@@ -11,7 +11,7 @@ from routers import batch, config, folder, preview
 
 PORT = 8766
 
-app = FastAPI(title="score_denoiser sidecar")
+app = FastAPI(title="Nitido sidecar")
 
 app.add_middleware(
     CORSMiddleware,
