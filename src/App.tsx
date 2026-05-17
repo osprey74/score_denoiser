@@ -24,7 +24,7 @@ interface BatchResult {
   error?: string;
 }
 
-const KSIZE_OPTIONS = [0, 3, 5, 7];
+const KSIZE_OPTIONS = [0, 3, 5, 7, 9, 11, 15, 21, 31];
 
 const DEFAULT_CONFIG: AppConfig = {
   folder: "",
