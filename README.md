@@ -4,6 +4,9 @@
 
 製品名「Nitido」（伊・西語で「鮮明な／くっきりした」の意）。リポジトリ名・ディレクトリ名は引き続き `score_denoiser`。
 
+📘 **ユーザー向け**: [インストール／操作マニュアル (日本語)](./docs/manual-ja.md)
+📥 **ダウンロード**: [GitHub Releases (latest)](https://github.com/osprey74/score_denoiser/releases/latest)
+
 ## スタック
 
 - **Frontend**: Tauri v2, React 18, TypeScript, Vite
