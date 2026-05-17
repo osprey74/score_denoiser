@@ -6,7 +6,7 @@ const ZOOM_MIN = 0.05;
 const ZOOM_MAX = 16;
 const WHEEL_STEP = 1.15;
 
-interface Viewport {
+export interface Viewport {
   x: number; // image-space top-left
   y: number;
   zoom: number; // canvas_px / image_px
@@ -15,14 +15,20 @@ interface Viewport {
 interface PreviewCanvasProps {
   imageB64: string | null;
   caption?: string;
-  resetSignal: number; // bump to force fit
+  view: Viewport;
+  onViewChange: (v: Viewport) => void;
+  pendingFit: boolean;
+  onFitDone: () => void;
   loading?: boolean;
 }
 
 export function PreviewCanvas({
   imageB64,
   caption,
-  resetSignal,
+  view,
+  onViewChange,
+  pendingFit,
+  onFitDone,
   loading,
 }: PreviewCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -33,12 +39,11 @@ export function PreviewCanvas({
   // 現在の bitmap がどの imageB64 から作られたか（レース対策）
   const [bitmapKey, setBitmapKey] = useState<string | null>(null);
   const [containerSize, setContainerSize] = useState({ w: 600, h: 400 });
-  const [view, setView] = useState<Viewport>({ x: 0, y: 0, zoom: 1 });
-  // 次回 bitmap が現在の imageB64 と一致した時点で fit を適用する旗
-  const [pendingFit, setPendingFit] = useState(true);
 
   const viewRef = useRef(view);
   viewRef.current = view;
+  const onViewChangeRef = useRef(onViewChange);
+  onViewChangeRef.current = onViewChange;
   const sizeRef = useRef(containerSize);
   sizeRef.current = containerSize;
   const bitmapRef = useRef(bitmap);
@@ -87,20 +92,6 @@ export function PreviewCanvas({
     return { x, y, zoom };
   };
 
-  // ── resetSignal が変化したら pendingFit を立てる ──
-  // （初回マウント時にも一度だけ立つ → 最初の bitmap で fit される）
-  useEffect(() => {
-    setPendingFit(true);
-  }, [resetSignal]);
-
-  // ── bitmap が現在の imageB64 と一致しており、かつ pendingFit が立っているときだけ fit ──
-  // （= bitmap 変更だけでは fit しない。明示的 reset signal のときだけ fit する）
-  useEffect(() => {
-    if (!bitmap || bitmapKey !== imageB64 || !pendingFit) return;
-    setView(fitView(bitmap, sizeRef.current.w, sizeRef.current.h));
-    setPendingFit(false);
-  }, [bitmap, bitmapKey, imageB64, pendingFit]);
-
   // ── ビューポート制約（画像外に飛ばない） ────────
   const clampView = (v: Viewport, bmp: ImageBitmap, w: number, h: number): Viewport => {
     const visW = w / v.zoom;
@@ -113,6 +104,13 @@ export function PreviewCanvas({
     else y = Math.max(0, Math.min(y, bmp.height - visH));
     return { x, y, zoom: v.zoom };
   };
+
+  // ── pendingFit が立っていて、bitmap が現在の imageB64 と一致したら fit ──
+  useEffect(() => {
+    if (!bitmap || bitmapKey !== imageB64 || !pendingFit) return;
+    onViewChange(fitView(bitmap, containerSize.w, containerSize.h));
+    onFitDone();
+  }, [bitmap, bitmapKey, imageB64, pendingFit, containerSize.w, containerSize.h, onViewChange, onFitDone]);
 
   // ── キャンバス描画 ───────────────────────────────
   useEffect(() => {
@@ -191,12 +189,13 @@ export function PreviewCanvas({
       const v = viewRef.current;
       const factor = e.deltaY < 0 ? WHEEL_STEP : 1 / WHEEL_STEP;
       const newZoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, v.zoom * factor));
-      // ズーム中心がマウス位置になるよう x,y を調整
       const imgX = v.x + mx / v.zoom;
       const imgY = v.y + my / v.zoom;
       const newX = imgX - mx / newZoom;
       const newY = imgY - my / newZoom;
-      setView(clampView({ x: newX, y: newY, zoom: newZoom }, bmp, sizeRef.current.w, sizeRef.current.h));
+      onViewChangeRef.current(
+        clampView({ x: newX, y: newY, zoom: newZoom }, bmp, sizeRef.current.w, sizeRef.current.h),
+      );
     };
     canvas.addEventListener("wheel", onWheel, { passive: false });
     return () => canvas.removeEventListener("wheel", onWheel);
@@ -212,7 +211,6 @@ export function PreviewCanvas({
       vx: viewRef.current.x,
       vy: viewRef.current.y,
     };
-    (e.target as HTMLElement).setPointerCapture?.(e.nativeEvent.button);
   };
   const onMouseMove = (e: React.MouseEvent) => {
     const d = dragRef.current;
@@ -220,7 +218,7 @@ export function PreviewCanvas({
     if (!d || !bmp) return;
     const dx = (e.clientX - d.startX) / viewRef.current.zoom;
     const dy = (e.clientY - d.startY) / viewRef.current.zoom;
-    setView(
+    onViewChangeRef.current(
       clampView(
         { x: d.vx - dx, y: d.vy - dy, zoom: viewRef.current.zoom },
         bmp,
@@ -233,7 +231,7 @@ export function PreviewCanvas({
     dragRef.current = null;
   };
 
-  // ── ミニマップクリックでビューポートジャンプ ─────
+  // ── ミニマップクリック ───────────────────────────
   const onMinimapClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const bmp = bitmapRef.current;
     if (!bmp) return;
@@ -246,7 +244,7 @@ export function PreviewCanvas({
     const v = viewRef.current;
     const visW = sizeRef.current.w / v.zoom;
     const visH = sizeRef.current.h / v.zoom;
-    setView(
+    onViewChangeRef.current(
       clampView(
         { x: imgX - visW / 2, y: imgY - visH / 2, zoom: v.zoom },
         bmp,
@@ -259,7 +257,7 @@ export function PreviewCanvas({
   // ── fit ボタン ──────────────────────────────────
   const onFit = () => {
     if (!bitmap) return;
-    setView(fitView(bitmap, containerSize.w, containerSize.h));
+    onViewChange(fitView(bitmap, containerSize.w, containerSize.h));
   };
 
   return (

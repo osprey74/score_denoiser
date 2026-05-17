@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 
-import { PreviewCanvas } from "./components/PreviewCanvas";
+import { PreviewCanvas, Viewport } from "./components/PreviewCanvas";
 import {
   AppConfig,
   BatchEvent,
@@ -52,7 +52,11 @@ export default function App() {
   const [preview, setPreview] = useState<PreviewResponse | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
-  const [resetSignal, setResetSignal] = useState(0);
+
+  // 分割表示で左右を連動させるため、view 状態を App に持つ（両 canvas 共有）
+  const [view, setView] = useState<Viewport>({ x: 0, y: 0, zoom: 1 });
+  const [pendingFit, setPendingFit] = useState(true); // 初回は fit
+  const shouldFitNextRef = useRef(false); // 次回プレビュー到着時に fit を発火
 
   const [toast, setToast] = useState<{ msg: string; kind: "info" | "warn" | "error" } | null>(null);
   const toastTimer = useRef<number | null>(null);
@@ -126,13 +130,13 @@ export default function App() {
     if (!dir || typeof dir !== "string") return;
     try {
       const r = await listFolder(dir);
+      shouldFitNextRef.current = true; // 次回プレビューで fit を発火
       setFiles(r.files);
       setStatuses({});
       setBatchResults([]);
       setCurIdx(r.files.length > 0 ? 0 : -1);
       setPreview(null);
       setCfg((c) => ({ ...c, folder: dir }));
-      setResetSignal((s) => s + 1);
       showToast(`${r.files.length} 個の PNG を検出`, "info");
     } catch (e) {
       showToast(String(e), "error");
@@ -148,7 +152,12 @@ export default function App() {
       try {
         const r = await generatePreview(f.path, params, showMode !== "after");
         setPreview(r);
-        // reset の発火はファイル変更を検出する別 effect で扱う（パラメータ変更時は維持）
+        // 「ファイル変更」または「フォルダ選択」由来のフィットは、setPreview の直後に発火する
+        // (imageB64 が新しい値になってから pendingFit が立つように、レース回避)
+        if (shouldFitNextRef.current) {
+          shouldFitNextRef.current = false;
+          setPendingFit(true);
+        }
       } catch (e) {
         setPreviewError(String(e));
         setPreview(null);
@@ -159,20 +168,20 @@ export default function App() {
     [files, params, showMode],
   );
 
-  // auto-preview on selection change (also fires on param/showMode change via runPreview ref)
-  useEffect(() => {
-    if (curIdx >= 0 && curIdx < files.length) runPreview(curIdx);
-  }, [curIdx, files, runPreview]);
-
-  // ファイル変更時のみ reset (パラメータ変更ではトリガーしない)
+  // ファイル変更を検出し、!keep_view ならフィットフラグを立てる
   const prevFilePathRef = useRef<string>("");
   useEffect(() => {
     const cur = curIdx >= 0 && curIdx < files.length ? files[curIdx].path : "";
-    if (prevFilePathRef.current && prevFilePathRef.current !== cur && !cfgRef.current.keep_view) {
-      setResetSignal((s) => s + 1);
+    if (prevFilePathRef.current !== "" && prevFilePathRef.current !== cur && !cfgRef.current.keep_view) {
+      shouldFitNextRef.current = true;
     }
     prevFilePathRef.current = cur;
   }, [curIdx, files]);
+
+  // auto-preview on selection / params / showMode change
+  useEffect(() => {
+    if (curIdx >= 0 && curIdx < files.length) runPreview(curIdx);
+  }, [curIdx, files, runPreview]);
 
   // -- keyboard shortcuts --
   useEffect(() => {
@@ -199,7 +208,7 @@ export default function App() {
         if (curIdx >= 0) runPreview(curIdx);
       } else if (e.key === "Home") {
         e.preventDefault();
-        setResetSignal((s) => s + 1);
+        setPendingFit(true);
       }
     };
     window.addEventListener("keydown", onKey);
@@ -414,13 +423,19 @@ export default function App() {
               <PreviewCanvas
                 imageB64={beforeB64}
                 caption="処理前"
-                resetSignal={resetSignal}
+                view={view}
+                onViewChange={setView}
+                pendingFit={pendingFit}
+                onFitDone={() => setPendingFit(false)}
                 loading={previewLoading}
               />
               <PreviewCanvas
                 imageB64={afterB64}
                 caption="処理後"
-                resetSignal={resetSignal}
+                view={view}
+                onViewChange={setView}
+                pendingFit={pendingFit}
+                onFitDone={() => setPendingFit(false)}
                 loading={previewLoading}
               />
             </div>
@@ -428,14 +443,20 @@ export default function App() {
             <PreviewCanvas
               imageB64={beforeB64}
               caption="処理前"
-              resetSignal={resetSignal}
+              view={view}
+              onViewChange={setView}
+              pendingFit={pendingFit}
+              onFitDone={() => setPendingFit(false)}
               loading={previewLoading}
             />
           ) : afterB64 ? (
             <PreviewCanvas
               imageB64={afterB64}
               caption="処理後"
-              resetSignal={resetSignal}
+              view={view}
+              onViewChange={setView}
+              pendingFit={pendingFit}
+              onFitDone={() => setPendingFit(false)}
               loading={previewLoading}
             />
           ) : !previewLoading ? (
