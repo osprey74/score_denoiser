@@ -23,25 +23,32 @@ score_denoiser/
 └── HANDOFF.md        # 引き継ぎ・残タスク
 ```
 
-## 開発コマンド
+## 開発コマンド（2 ターミナル運用）
 
-```bash
-# Node 依存ライブラリ
+Phase 1 ではサイドカーを手動起動する方式です（Phase 3 で PyInstaller バンドル + Rust 自動起動に切り替え予定）。
+
+```powershell
+# ── 初回セットアップ ──
+# Node 依存
 npm install
 
 # Python サイドカー依存
 cd sidecar
 python -m venv .venv
-.venv\Scripts\Activate.ps1   # Windows
+.venv\Scripts\Activate.ps1   # Windows (PowerShell)
 # source .venv/bin/activate    # macOS/Linux
 pip install -r requirements.txt
 cd ..
+```
 
-# フロント + Tauri 開発起動（サイドカーも自動起動）
+```powershell
+# ── 通常の開発フロー ──
+# [Terminal 1] サイドカー起動（.venv を activate してから）
+npm run sidecar
+# → http://127.0.0.1:8766 で待機（--reload で自動再読み込み）
+
+# [Terminal 2] Tauri 開発起動
 npm run tauri dev
-
-# サイドカー単体起動（デバッグ用）
-cd sidecar && uvicorn main:app --port 8766 --reload
 ```
 
 ## アルゴリズム

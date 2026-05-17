@@ -36,7 +36,9 @@
 
 ## 4. 動作確認手順（初回セットアップ）
 
-```bash
+Phase 1 ではサイドカーを **手動起動** する 2 ターミナル方式です。
+
+```powershell
 # 1. Node 依存
 npm install
 
@@ -47,15 +49,27 @@ python -m venv .venv
 pip install -r requirements.txt
 cd ..
 
-# 3. サイドカー単独起動でAPI動作確認
-cd sidecar && uvicorn main:app --port 8766
-# 別ターミナル
-curl http://127.0.0.1:8766/health
+# 3. [Terminal 1] サイドカー起動
+npm run sidecar
+# → http://127.0.0.1:8766 で待機
 
-# 4. Tauri 開発起動（サイドカーは Rust から自動起動するが、
-#    開発時は手動起動推奨：lib.rs の sidecar() は本番バイナリ前提）
+# 4. [Terminal 2] Tauri 開発起動
 npm run tauri dev
 ```
+
+## 4.1 Phase 1 の Rust 側設計（重要）
+
+- `src-tauri/Cargo.toml` から `tauri-plugin-shell` を除去
+- `src-tauri/tauri.conf.json` から `externalBin` を除去
+- `src-tauri/src/lib.rs` から `app.shell().sidecar()` 呼び出しを除去
+- `src-tauri/capabilities/default.json` は `core:default` と `dialog:default` のみに簡素化
+
+Phase 3 で PyInstaller バイナリを `src-tauri/binaries/sidecar-<target>` に配置できるようになったら、以下を **復活** させる:
+
+1. `Cargo.toml` に `tauri-plugin-shell = "2"` を追加
+2. `tauri.conf.json` の `bundle` に `"externalBin": ["binaries/sidecar"]` を追加
+3. `capabilities/default.json` に shell サイドカー権限を追加
+4. `lib.rs` で `app.shell().sidecar("sidecar")` 経由の自動起動と `kill_sidecar()` を復活
 
 ## 5. Phase 2: UI 充実（残タスク）
 
