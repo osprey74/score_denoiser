@@ -118,6 +118,24 @@ git push origin v0.1.0
 | F5 | プレビュー再生成 |
 | Home | ビュー fit |
 
-## ライセンス・備考
+## ライセンス
 
-個人利用ツール。`legacy-python/` には Tkinter 版 v2.6 を保管しています（参照用）。
+**MIT License** — 詳細は [LICENSE](./LICENSE) を参照してください。
+
+### 同梱ライブラリのライセンス
+
+- OpenCV: Apache License 2.0
+- FastAPI / Starlette / Pydantic / React / Tauri: MIT License
+- NumPy: BSD License
+- Pillow: HPND License
+- PyInstaller bootloader: GPL with bootloader exception（生成バイナリは自由に配布可）
+
+すべて MIT と互換のライセンスです。
+
+### アイコン
+
+アプリアイコンは [Music-score icons](https://www.flaticon.com/free-icons/music-score) by Freepik – Flaticon を使用しています（要 attribution、アプリ内の「このアプリについて」ダイアログに記載）。
+
+## 備考
+
+`legacy-python/` には Tkinter 版 v2.6 を保管しています（参照用）。

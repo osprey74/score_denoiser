@@ -3,6 +3,8 @@ name = "score_denoiser"
 version = "1.0.0"
 description = "Nitido — 楽譜ノイズ除去ツール"
 authors = ["osprey74"]
+license = "MIT"
+repository = "https://github.com/osprey74/score_denoiser"
 edition = "2021"
 
 [lib]
