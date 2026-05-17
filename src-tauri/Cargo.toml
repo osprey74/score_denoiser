@@ -1,6 +1,6 @@
 [package]
 name = "score_denoiser"
-version = "1.0.0"
+version = "1.0.1"
 description = "Nitido — 楽譜ノイズ除去ツール"
 authors = ["osprey74"]
 license = "MIT"
