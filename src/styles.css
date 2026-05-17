@@ -472,7 +472,13 @@ button:hover:not(:disabled) { background: #efefef; }
   cursor: pointer;
   transition: opacity 0.15s;
 }
-.kofi-button:hover { opacity: 0.9; }
+/* グローバル button:hover:not(:disabled) より specificity を上げ、
+   Ko-fi ブランドカラー（青背景＋白文字）を維持する */
+.kofi-button:hover:not(:disabled) {
+  background: #0085FF;
+  color: #fff;
+  opacity: 0.9;
+}
 .kofi-cup {
   width: 16px;
   height: 16px;
